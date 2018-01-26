@@ -6,6 +6,7 @@ import time
 import queue
 import threading
 from pdu import decodepdu
+import pingdemo
 
 cmdsettxt = 'AT+CMGF=1\r\n'
 cmdreadmsg = 'AT+CMGR=37\r\n'
@@ -166,6 +167,9 @@ def readmsg():
         handle.getmsgfromQ()
         msggotflag.set()
 
+def msginit():
+    pass
+
 cp2102 = cp2102_open()
 handle = A6handle(cp2102)
 
@@ -181,6 +185,9 @@ t2.start()
 while True:
     readq = handle.qpdu.get()
     print("PDU from Q:",readq)
+    if pingdemo.Netchk() :
+        pass
+
 
 '''
 handle.sendtestmsg()

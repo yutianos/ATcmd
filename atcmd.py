@@ -5,6 +5,7 @@ import os
 import time
 import queue
 from pdu import decodepdu
+import pingdemo
 
 cmdsettxt = 'AT+CMGF=1\r\n'
 cmdreadmsg = 'AT+CMGR=37\r\n'
@@ -143,6 +144,9 @@ def cp2102_open(device="/dev/ttyUSB0"):
 cp2102 = cp2102_open()
 handle = A6handle(cp2102)
 
+if pingdemo.Netchk() :
+    pass 
+ 
 handle.isconnect()
 handle.sendtestmsg()
 while True :
