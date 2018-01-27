@@ -5,6 +5,7 @@ import os
 import time
 import queue
 import threading
+from  sendmail import mail
 from pdu import decodepdu
 import pingdemo
 
@@ -17,6 +18,12 @@ delmsgcmd = 'AT+CMGD='
 def logg(data):
     print(data)
 
+
+def log(dat):
+    f = open('log.txt','a')
+    f.write('\n')
+    f.write(dat)
+    f.close()
 
 '''
 cmdfindusb = 'dmesg |grep cp210x|grep tty'
@@ -102,7 +109,11 @@ class A6handle:
     def setpdumode(self):
         self.com.write(cmdsetpud.encode())
         res = self.waitfor()
-        
+        if res[1] == 'OK' :
+            return 'OK'
+        else :
+            return 'ERR'
+    
 
     def getmsg(self,index):
         cmd = 'AT+CMGR=' + index + '\r\n'
@@ -133,6 +144,33 @@ class A6handle:
         res = self.waitfor()
         logg(res)
         
+    def listmsg_unread(self):
+        if self.setpdumode() == 'ERR':
+            return 'ERR'
+        msgbuf = []
+
+        self.com.write(cmdlistmsg_unread.encode())
+        res = ''
+        while True :
+            if res.find('OK') > 0 :
+                msgbuf = res.split()
+                msgbuf = msgbuf[3::3]
+                log('***list msg unread***')
+                log('#'.join(msgbuf))
+                return msgbuf
+            else :
+                for i in range(20) :
+                    breakflag = 0
+                    time.sleep(0.4)
+                    if self.com.in_waiting:
+                        breakflag = 1
+                        res += self.com.read(self.com.in_waiting).decode()
+
+                    if breakflag :
+                        break;
+
+
+
     def thread_test1(self):
         print("this is thread 1")
         time.sleep(1)
@@ -167,27 +205,73 @@ def readmsg():
         handle.getmsgfromQ()
         msggotflag.set()
 
+def sendmail():
+    while True:
+        readq = handle.qpdu.get()
+        #print("PDU from Q:",readq)
+        if pingdemo.Netchk() :
+            logmsg_unmail(readq)
+        else :
+            mail(readq)
+
+
+cmdlistmsg_unread = 'AT+CMGL=0\r\n'
+cmdlistmsg_read = 'AT+CMGL=1\r\n'
+cmddelmsg_read = 'AT+CMGD=1,2\r\n'
+
+mailsendQ = queue.Queue()
+
+def logmsg_unmail(str):
+    f = open("msg_unsend.txt",'a')
+    f.write('\r\n\r\n')
+    f.write(str)
+    f.write('\r\n\r\n')
+    f.close()
+
+
 def msginit():
-    pass
+    
+    if handle.isconnect():
+        print('A6 is lost...exit()')
+        return 1
+    if handle.setpdumode() == 'ERR':
+        return 'ERR'
+    pudmsg = handle.listmsg_unread()
+ 
+    sendmail = ''
+    if len(pudmsg)==0 :
+        log("no msg to read")
+    else :
+        for i in range(0,len(pudmsg)) :
+            str = decodepdu(pudmsg[i])
+            sendmail +='\n'.join(str)
+        if pingdemo.Netchk() : 
+            logmsg_unmail(sendmail) 
+        else :
+            mail(sendmail)
+    
+    
 
 cp2102 = cp2102_open()
 handle = A6handle(cp2102)
 
-handle.isconnect()
 
+#handle.sendtestmsg()
+#handle.listmsg_unread()
+msginit()
 t1 = threading.Thread(target=waitformsg)
 t2 = threading.Thread(target=readmsg)
+t3 = threading.Thread(target=sendmail)
 
-handle.sendtestmsg()
-time.sleep(2)
 t1.start()
 t2.start()
 while True:
     readq = handle.qpdu.get()
     print("PDU from Q:",readq)
     if pingdemo.Netchk() :
-        pass
-
+        logmsg_unmail(readq)
+    else :
+        mail(readq)
 
 '''
 handle.sendtestmsg()
