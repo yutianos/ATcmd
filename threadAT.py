@@ -2,6 +2,7 @@
 
 import serial
 import os
+improt sys
 import time
 import queue
 import threading
@@ -9,18 +10,22 @@ from  sendmail import mail
 from pdu import decodepdu
 import pingdemo
 
+path = sys.path[0]
+
 cmdsettxt = 'AT+CMGF=1\r\n'
 cmdreadmsg = 'AT+CMGR=37\r\n'
 cmdsetpud = 'AT+CMGF=0\r\n'
 trg_recmsgcmd = '+CMTI:'
 delmsgcmd = 'AT+CMGD='
+cmddelreadmsg = 'AT+CMGD=1,2\r\n'
 
 def logg(data):
     print(data)
 
-
+logpath = path + '/log.txt'
+msgpath = path + '/msg.txt'
 def log(dat):
-    f = open('log.txt','a')
+    f = open(logpath,'a')
     f.write('\n')
     f.write(dat)
     f.close()
@@ -51,7 +56,7 @@ class A6handle:
             if breakflag :
                 resp=res.split() 
                 return resp
-        return 1 
+        return "ERR"
 
     def delmsg(self,index):
         cmd = delmsgcmd + index + '\r\n'
@@ -78,7 +83,7 @@ class A6handle:
                 if resp[0] == trg_recmsgcmd :
                     A6handle.qmsg.put(resp[1].split(',')[1])
                     print(resp)
-                    return 0
+                    return "OK"
             time.sleep(0.5) 
             
     def getmsgfromQ(self):
@@ -92,17 +97,17 @@ class A6handle:
     def isconnect(self):
         self.com.write('AT\r\n'.encode())
         res = self.waitfor()
-        print(type(res))
-        if res== 1:
+        #print(type(res))
+        if res == "ERR":
             print("A6 is lost")
-            return 1
+            return "ERR"
         else:
             if res[1]=='OK':
                 print("A6 is connceting")
-                return 0
+                return "OK"
             else :
                 print("A6 is lost")
-                return 1
+                return "ERR"
 
 
 
@@ -123,7 +128,7 @@ class A6handle:
         str = '\n'.join(res)
         demsg = decodepdu(str)
         demsg = '\n'.join(demsg)
-        f = open("msg.txt",'a')
+        f = open(msgpath,'a')
         f.write('\r\n\r\n')
         f.write(demsg)
         f.write('\r\n\r\n')
@@ -156,7 +161,7 @@ class A6handle:
                 msgbuf = res.split()
                 msgbuf = msgbuf[3::3]
                 log('***list msg unread***')
-                log('#'.join(msgbuf))
+                log('\n'.join(msgbuf))
                 return msgbuf
             else :
                 for i in range(20) :
@@ -168,7 +173,12 @@ class A6handle:
 
                     if breakflag :
                         break;
-
+    def delreadmsg(self):
+        self.com.write(cmddelreadmsg.encode())
+        time.sleep(0.5)
+        resp = self.waitfor()
+        logg(resp)
+        
 
 
     def thread_test1(self):
@@ -221,8 +231,9 @@ cmddelmsg_read = 'AT+CMGD=1,2\r\n'
 
 mailsendQ = queue.Queue()
 
+msgunsendfile = path + '/msg_unsend.txt'
 def logmsg_unmail(str):
-    f = open("msg_unsend.txt",'a')
+    f = open(msgunsendfile,'a')
     f.write('\r\n\r\n')
     f.write(str)
     f.write('\r\n\r\n')
@@ -231,9 +242,9 @@ def logmsg_unmail(str):
 
 def msginit():
     
-    if handle.isconnect():
+    if handle.isconnect()=="ERR":
         print('A6 is lost...exit()')
-        return 1
+        return "ERR"
     if handle.setpdumode() == 'ERR':
         return 'ERR'
     pudmsg = handle.listmsg_unread()
@@ -249,6 +260,9 @@ def msginit():
             logmsg_unmail(sendmail) 
         else :
             mail(sendmail)
+        
+        handle.delreadmsg()
+
     
     
 
@@ -265,6 +279,7 @@ t3 = threading.Thread(target=sendmail)
 
 t1.start()
 t2.start()
+print("thread is running")
 while True:
     readq = handle.qpdu.get()
     print("PDU from Q:",readq)

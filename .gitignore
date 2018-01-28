@@ -2,3 +2,6 @@
 log.txt
 msg.txt
 
+boot.sh
+*.out
+*.pyc
